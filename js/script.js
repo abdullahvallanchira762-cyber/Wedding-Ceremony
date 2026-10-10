@@ -12,19 +12,12 @@ window.scrollTo(0, 0);
 document.addEventListener('DOMContentLoaded', () => {
     // Application State
     const state = {
-        isOpened: false,
-        isPlaying: false,
-        isMuted: false,
-        audioVolume: 0.28,
-        synthContext: null,
-        synthInterval: null,
-        usingSynth: false
+        isOpened: false
     };
 
     // Initialize all modules
     initializeSmoothScroll();
     initializeOpening();
-    initializeMusic();
     initializeNavigation();
     initializeCountdown();
     initializeCalendarDownloads();
@@ -102,8 +95,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 openingScreen.style.display = 'none';
             }, 750);
 
-            // Begin wedding nasheed with audio unlock
-            startAudioPlayback();
 
             // Resume Lenis, recalculate document boundaries, and align to top
             if (window.lenis) {
@@ -185,188 +176,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    /**
-     * MODULE 2: WEDDING NASHEED & AUDIO CONTROLS
-     * Native HTML5 Audio + Web Audio API harmonic harp fallback
-     */
-    function initializeMusic() {
-        const audio = document.getElementById('weddingAudio');
-        const fab = document.getElementById('musicFab');
-        const fabPlayToggle = document.getElementById('fabPlayToggle');
-        const btnMusicToggle = document.getElementById('btnMusicToggle');
-        const btnMusicMute = document.getElementById('btnMusicMute');
-        const vinyl = document.querySelector('.section-music');
 
-        if (!audio) return;
-
-        audio.volume = state.audioVolume;
-
-        // Play / Pause Toggle
-        function togglePlayPause() {
-            if (state.isPlaying) {
-                pauseAudio();
-            } else {
-                startAudioPlayback();
-            }
-        }
-
-        // Mute / Unmute Toggle
-        function toggleMute() {
-            state.isMuted = !state.isMuted;
-            if (audio) {
-                audio.muted = state.isMuted;
-            }
-            if (state.usingSynth && state.synthContext) {
-                // Adjust synth master volume if using fallback
-                if (state.synthMasterGain) {
-                    state.synthMasterGain.gain.setValueAtTime(
-                        state.isMuted ? 0 : 0.05,
-                        state.synthContext.currentTime
-                    );
-                }
-            }
-            updateAudioUI();
-        }
-
-        if (fabPlayToggle) fabPlayToggle.addEventListener('click', togglePlayPause);
-        if (btnMusicToggle) btnMusicToggle.addEventListener('click', togglePlayPause);
-        if (btnMusicMute) btnMusicMute.addEventListener('click', toggleMute);
-
-        // Update UI states
-        function updateAudioUI() {
-            const body = document.body;
-            if (state.isPlaying) {
-                body.classList.remove('music-paused');
-                body.classList.add('music-playing');
-                if (fabPlayToggle) {
-                    fabPlayToggle.setAttribute('aria-label', 'Pause wedding nasheed');
-                    fabPlayToggle.setAttribute('title', 'Pause Nasheed');
-                }
-                if (btnMusicToggle) {
-                    const textSpan = btnMusicToggle.querySelector('.music-btn-text');
-                    if (textSpan) textSpan.textContent = 'PAUSE MUSIC';
-                }
-            } else {
-                body.classList.remove('music-playing');
-                body.classList.add('music-paused');
-                if (fabPlayToggle) {
-                    fabPlayToggle.setAttribute('aria-label', 'Play wedding nasheed');
-                    fabPlayToggle.setAttribute('title', 'Play Nasheed');
-                }
-                if (btnMusicToggle) {
-                    const textSpan = btnMusicToggle.querySelector('.music-btn-text');
-                    if (textSpan) textSpan.textContent = 'PLAY NASHEED';
-                }
-            }
-
-            if (state.isMuted) {
-                body.classList.add('music-muted');
-                if (btnMusicMute) {
-                    const textSpan = btnMusicMute.querySelector('.music-btn-text');
-                    if (textSpan) textSpan.textContent = 'UNMUTE';
-                }
-            } else {
-                body.classList.remove('music-muted');
-                if (btnMusicMute) {
-                    const textSpan = btnMusicMute.querySelector('.music-btn-text');
-                    if (textSpan) textSpan.textContent = 'MUTE';
-                }
-            }
-        }
-
-        // Start playback
-        window.startAudioPlayback = function () {
-            state.isPlaying = true;
-            updateAudioUI();
-
-            audio.play().then(() => {
-                state.usingSynth = false;
-            }).catch(err => {
-                console.warn('HTML5 Audio playback note:', err);
-                // Graceful fallback to serene Web Audio harmonic chord synthesizer
-                startHarmonicSynthesizer();
-            });
-        };
-
-        // Pause playback
-        window.pauseAudio = function () {
-            state.isPlaying = false;
-            audio.pause();
-            stopHarmonicSynthesizer();
-            updateAudioUI();
-        };
-
-        // Web Audio harmonic synthesizer fallback
-        function startHarmonicSynthesizer() {
-            if (state.usingSynth) return;
-            try {
-                const AudioCtx = window.AudioContext || window.webkitAudioContext;
-                if (!AudioCtx) return;
-
-                const ctx = new AudioCtx();
-                state.synthContext = ctx;
-                state.usingSynth = true;
-
-                const masterGain = ctx.createGain();
-                masterGain.gain.setValueAtTime(state.isMuted ? 0 : 0.05, ctx.currentTime);
-                masterGain.connect(ctx.destination);
-                state.synthMasterGain = masterGain;
-
-                // Traditional warm melodic chords (D major pentatonic / Hijaz warmth)
-                const chordSet = [
-                    [146.83, 220.00, 293.66, 369.99], // D maj
-                    [185.00, 220.00, 293.66, 440.00], // Bm7
-                    [164.81, 196.00, 246.94, 293.66], // G maj
-                    [146.83, 220.00, 293.66, 329.63]  // D sus
-                ];
-                let chordStep = 0;
-
-                const playChord = () => {
-                    if (!state.isPlaying || !state.synthContext || state.synthContext.state === 'closed') return;
-                    const chord = chordSet[chordStep % chordSet.length];
-                    chordStep++;
-
-                    chord.forEach((freq, i) => {
-                        const osc = ctx.createOscillator();
-                        const noteGain = ctx.createGain();
-
-                        osc.type = i === 0 ? 'sine' : 'triangle';
-                        osc.frequency.setValueAtTime(freq, ctx.currentTime);
-
-                        const startTime = ctx.currentTime + i * 0.16;
-                        const duration = 4.2;
-
-                        noteGain.gain.setValueAtTime(0, startTime);
-                        noteGain.gain.linearRampToValueAtTime(0.04, startTime + 0.9);
-                        noteGain.gain.exponentialRampToValueAtTime(0.0001, startTime + duration);
-
-                        osc.connect(noteGain);
-                        noteGain.connect(masterGain);
-
-                        osc.start(startTime);
-                        osc.stop(startTime + duration + 0.1);
-                    });
-                };
-
-                playChord();
-                state.synthInterval = setInterval(playChord, 4000);
-            } catch (e) {
-                console.warn('Synthesizer unavailable:', e);
-            }
-        }
-
-        function stopHarmonicSynthesizer() {
-            if (state.synthInterval) {
-                clearInterval(state.synthInterval);
-                state.synthInterval = null;
-            }
-            if (state.synthContext) {
-                try { state.synthContext.close(); } catch (e) { }
-                state.synthContext = null;
-            }
-            state.usingSynth = false;
-        }
-    }
 
     /**
      * MODULE 3: NAVIGATION
